@@ -1,0 +1,8 @@
+{
+  "min_font_size": 20,
+  "unsafe_top": 200,
+  "unsafe_bottom": 250,
+  "required_disclaimer": "Selected stores. While stocks last.",
+  "allowed_tags": ["Only at Tesco", "Available at Tesco"]
+}
+
