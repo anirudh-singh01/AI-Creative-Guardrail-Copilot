@@ -1,6 +1,5 @@
 import useStore from '../store/useStore'
 import { adaptCanvasLayout } from '../utils/canvasLayout'
-import { Sparkles } from 'lucide-react'
 
 const FormatSelector = () => {
   const { currentFormat, setCurrentFormat, canvas, setLoading } = useStore()
@@ -39,45 +38,24 @@ const FormatSelector = () => {
   }
 
   return (
-    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-4 w-full sm:w-auto">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
-        <span className="text-xs sm:text-sm font-medium text-gray-300 whitespace-nowrap">Format:</span>
-        <div className="flex gap-1 sm:gap-2 flex-wrap">
-          {formats.map((format) => (
-            <button
-              key={format.value}
-              onClick={() => setCurrentFormat(format.value)}
-              className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl text-xs sm:text-sm font-medium transition-all duration-300 ${
-                currentFormat === format.value
-                  ? 'bg-gradient-to-r from-neon-purple to-neon-cyan text-white shadow-neon-sm'
-                  : 'bg-slate-700/50 text-gray-300 hover:bg-slate-700 border border-neon-purple/30'
-              }`}
-            >
-              <span className="hidden sm:inline">{format.label}</span>
-              <span className="sm:hidden">{format.value}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-      
-      <div className="hidden sm:block h-6 w-px bg-gradient-to-b from-transparent via-neon-cyan/50 to-transparent"></div>
-      
-      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
-        <span className="text-xs sm:text-sm font-medium text-gray-300 whitespace-nowrap">Generate:</span>
-        <div className="flex gap-1 sm:gap-2 flex-wrap">
-          {formats.map((format) => (
-            <button
-              key={`generate-${format.value}`}
-              onClick={() => handleGenerate(format)}
-              className="px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl text-xs sm:text-sm font-medium transition-all duration-300 bg-gradient-to-r from-neon-purple to-neon-cyan text-white hover:from-neon-purple/90 hover:to-neon-cyan/90 flex items-center gap-1 sm:gap-1.5 shadow-card hover:shadow-card-hover transform hover:scale-105"
-              title={`Generate ${format.generateWidth}×${format.generateHeight}`}
-            >
-              <Sparkles size={12} className="sm:w-3.5 sm:h-3.5" />
-              <span className="hidden sm:inline">{format.generateWidth}×{format.generateHeight}</span>
-              <span className="sm:hidden">{format.value}</span>
-            </button>
-          ))}
-        </div>
+    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
+      <span className="text-xs sm:text-sm font-semibold text-gray-300 whitespace-nowrap uppercase tracking-wider">Format:</span>
+      <div className="flex gap-2 flex-wrap">
+        {formats.map((format) => (
+          <button
+            key={format.value}
+            onClick={() => handleGenerate(format)}
+            className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all duration-300 ${
+              currentFormat === format.value
+                ? 'bg-gradient-to-r from-neon-purple to-neon-cyan text-white shadow-neon-sm'
+                : 'bg-slate-700/50 text-gray-300 hover:bg-slate-700 border border-neon-purple/30 hover:border-neon-purple/50'
+            }`}
+            title={`Set canvas to ${format.label} (${format.generateWidth}×${format.generateHeight})`}
+          >
+            <span className="hidden sm:inline">{format.label}</span>
+            <span className="sm:hidden">{format.value}</span>
+          </button>
+        ))}
       </div>
     </div>
   )

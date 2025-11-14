@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { fabric } from 'fabric'
 import useStore from '../store/useStore'
-import { Download } from 'lucide-react'
+import { Download, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react'
 import { exportCreative, downloadFile } from '../utils/exportCreative'
 
 const CanvasArea = () => {
   const canvasRef = useRef(null)
   const { canvas, setCanvas, currentFormat, setSelectedObject, isLoading, setLoading } = useStore()
   const [isDragging, setIsDragging] = useState(false)
+  const [zoomLevel, setZoomLevel] = useState(100)
 
   useEffect(() => {
     if (!canvasRef.current) return
@@ -26,6 +27,12 @@ const CanvasArea = () => {
     fabricCanvas.selectionLineWidth = 2
 
     setCanvas(fabricCanvas)
+
+    // Update zoom level display when zoom changes (only from button clicks)
+    fabricCanvas.on('zoom', () => {
+      const currentZoom = fabricCanvas.getZoom()
+      setZoomLevel(Math.round(currentZoom * 100))
+    })
 
     // Handle object selection
     fabricCanvas.on('selection:created', (e) => {
@@ -54,64 +61,12 @@ const CanvasArea = () => {
     }
     window.addEventListener('keydown', handleKeyDown)
 
-    // Draw unsafe zone overlays
-    const drawUnsafeZones = () => {
-      const width = fabricCanvas.width
-      const height = fabricCanvas.height
-      const topUnsafeHeight = 200
-      const bottomUnsafeHeight = 250
+    // Unsafe zone logic (no visual overlays - just enforcement)
+    // The unsafe zones are still enforced but not visually displayed
 
-      // Remove existing unsafe zone overlays
-      const existingOverlays = fabricCanvas.getObjects().filter(
-        obj => obj.name === 'unsafeZoneTop' || obj.name === 'unsafeZoneBottom'
-      )
-      existingOverlays.forEach(overlay => fabricCanvas.remove(overlay))
-
-      // Top unsafe zone overlay (transparent red)
-      const topUnsafeZone = new fabric.Rect({
-        left: 0,
-        top: 0,
-        width: width,
-        height: topUnsafeHeight,
-        fill: 'rgba(255, 0, 0, 0.3)', // Transparent red
-        stroke: '#FF0000',
-        strokeWidth: 2,
-        strokeDashArray: [5, 5],
-        selectable: false,
-        evented: false,
-        name: 'unsafeZoneTop',
-        excludeFromExport: true,
-      })
-
-      // Bottom unsafe zone overlay (transparent red)
-      const bottomUnsafeZone = new fabric.Rect({
-        left: 0,
-        top: height - bottomUnsafeHeight,
-        width: width,
-        height: bottomUnsafeHeight,
-        fill: 'rgba(255, 0, 0, 0.3)', // Transparent red
-        stroke: '#FF0000',
-        strokeWidth: 2,
-        strokeDashArray: [5, 5],
-        selectable: false,
-        evented: false,
-        name: 'unsafeZoneBottom',
-        excludeFromExport: true,
-      })
-
-      fabricCanvas.add(topUnsafeZone)
-      fabricCanvas.add(bottomUnsafeZone)
-      fabricCanvas.sendToBack(topUnsafeZone)
-      fabricCanvas.sendToBack(bottomUnsafeZone)
-    }
-
-    drawUnsafeZones()
-
-    // Prevent objects from entering unsafe zones and enable snapping
-    const topUnsafeHeight = 200
-    const bottomUnsafeHeight = 250
-
-    const preventUnsafeZoneEntry = (obj) => {
+    // Allow objects to move freely anywhere on canvas
+    // Only keep objects within canvas bounds (no unsafe zone restrictions)
+    const keepObjectInBounds = (obj) => {
       if (!obj) return
       
       const width = fabricCanvas.width
@@ -125,17 +80,7 @@ const CanvasArea = () => {
       const objRight = objLeft + objWidth
       const objBottom = objTop + objHeight
 
-      // Prevent entering top unsafe zone
-      if (objTop < topUnsafeHeight) {
-        obj.top = topUnsafeHeight
-      }
-
-      // Prevent entering bottom unsafe zone
-      if (objBottom > height - bottomUnsafeHeight) {
-        obj.top = height - bottomUnsafeHeight - objHeight
-      }
-
-      // Keep object within canvas bounds
+      // Keep object within canvas bounds only
       if (objLeft < 0) {
         obj.left = 0
       }
@@ -150,75 +95,25 @@ const CanvasArea = () => {
       }
     }
 
-    // Handle object moving - prevent unsafe zone entry
+    // Handle object moving - only keep within canvas bounds
     fabricCanvas.on('object:moving', (e) => {
       const obj = e.target
-      
-      // Skip unsafe zone overlays
-      if (obj.name === 'unsafeZoneTop' || obj.name === 'unsafeZoneBottom') {
-        return
-      }
-
-      preventUnsafeZoneEntry(obj)
+      keepObjectInBounds(obj)
       fabricCanvas.renderAll()
     })
 
-    // Handle object resizing - prevent unsafe zone entry
+    // Handle object resizing - only keep within canvas bounds
     fabricCanvas.on('object:scaling', (e) => {
       const obj = e.target
       if (!obj) return
-      
-      // Skip unsafe zone overlays
-      if (obj.name === 'unsafeZoneTop' || obj.name === 'unsafeZoneBottom') {
-        return
-      }
-
-      // Calculate current object bounds (with null checks)
-      const objWidth = (obj.width || 0) * (obj.scaleX || 1)
-      const objHeight = (obj.height || 0) * (obj.scaleY || 1)
-      const objTop = obj.top || 0
-      const objBottom = objTop + objHeight
-
-      // Prevent top from going into unsafe zone
-      if (objTop < topUnsafeHeight) {
-        // Adjust position to keep top edge at safe zone boundary
-        obj.top = topUnsafeHeight
-      }
-
-      // Prevent bottom from going into unsafe zone
-      if (objBottom > fabricCanvas.height - bottomUnsafeHeight) {
-        // Limit height so bottom edge stays at safe zone boundary
-        const objHeightValue = obj.height || 1
-        const maxAllowedHeight = fabricCanvas.height - bottomUnsafeHeight - objTop
-        if (maxAllowedHeight > 0 && objHeightValue > 0) {
-          const maxScaleY = maxAllowedHeight / objHeightValue
-          if (obj.scaleY > maxScaleY) {
-            obj.scaleY = maxScaleY
-          }
-        } else {
-          // If object is too large, move it up
-          obj.top = topUnsafeHeight
-          const safeZoneHeight = fabricCanvas.height - bottomUnsafeHeight - topUnsafeHeight
-          if (objHeightValue > 0 && safeZoneHeight > 0) {
-            const maxScaleY = safeZoneHeight / objHeightValue
-            if (obj.scaleY > maxScaleY) {
-              obj.scaleY = maxScaleY
-            }
-          }
-        }
-      }
+      keepObjectInBounds(obj)
+      fabricCanvas.renderAll()
     })
 
     // Handle object modified (after resize/rotate) - final check
     fabricCanvas.on('object:modified', (e) => {
       const obj = e.target
-      
-      // Skip unsafe zone overlays
-      if (obj.name === 'unsafeZoneTop' || obj.name === 'unsafeZoneBottom') {
-        return
-      }
-
-      preventUnsafeZoneEntry(obj)
+      keepObjectInBounds(obj)
       fabricCanvas.renderAll()
     })
 
@@ -247,17 +142,10 @@ const CanvasArea = () => {
               
               img.scale(scale)
               
-              // Position in safe zone (avoiding top 200px and bottom 250px)
-              const topUnsafeHeight = 200
-              const bottomUnsafeHeight = 250
-              const safeTop = topUnsafeHeight
-              const safeBottom = fabricCanvas.height - bottomUnsafeHeight
-              const safeCenter = safeTop + (safeBottom - safeTop) / 2
-              
-              // Enable scaling and rotation
+              // Position in center of canvas (can be moved anywhere)
               img.set({
                 left: fabricCanvas.width / 2 - (img.width * scale) / 2,
-                top: safeCenter - (img.height * scale) / 2,
+                top: fabricCanvas.height / 2 - (img.height * scale) / 2,
                 hasControls: true,
                 hasBorders: true,
                 lockRotation: false,
@@ -324,53 +212,13 @@ const CanvasArea = () => {
     
     canvas.setDimensions({ width, height })
     
-    // Redraw unsafe zone overlays
-    const topUnsafeHeight = 200
-    const bottomUnsafeHeight = 250
-    
+    // Remove any existing unsafe zone overlays (if they exist)
     const existingOverlays = canvas.getObjects().filter(
       obj => obj.name === 'unsafeZoneTop' || obj.name === 'unsafeZoneBottom'
     )
     existingOverlays.forEach(overlay => canvas.remove(overlay))
     
-    // Top unsafe zone overlay
-    const topUnsafeZone = new fabric.Rect({
-      left: 0,
-      top: 0,
-      width: width,
-      height: topUnsafeHeight,
-      fill: 'rgba(255, 0, 0, 0.3)',
-      stroke: '#FF0000',
-      strokeWidth: 2,
-      strokeDashArray: [5, 5],
-      selectable: false,
-      evented: false,
-      name: 'unsafeZoneTop',
-      excludeFromExport: true,
-    })
-    
-    // Bottom unsafe zone overlay
-    const bottomUnsafeZone = new fabric.Rect({
-      left: 0,
-      top: height - bottomUnsafeHeight,
-      width: width,
-      height: bottomUnsafeHeight,
-      fill: 'rgba(255, 0, 0, 0.3)',
-      stroke: '#FF0000',
-      strokeWidth: 2,
-      strokeDashArray: [5, 5],
-      selectable: false,
-      evented: false,
-      name: 'unsafeZoneBottom',
-      excludeFromExport: true,
-    })
-    
-    canvas.add(topUnsafeZone)
-    canvas.add(bottomUnsafeZone)
-    canvas.sendToBack(topUnsafeZone)
-    canvas.sendToBack(bottomUnsafeZone)
-    
-    // Ensure all objects stay out of unsafe zones
+    // Ensure all objects stay within canvas bounds (no unsafe zone restrictions)
     const allObjects = canvas.getObjects().filter(
       obj => obj && obj.name !== 'unsafeZoneTop' && obj.name !== 'unsafeZoneBottom'
     )
@@ -378,19 +226,54 @@ const CanvasArea = () => {
       if (!obj) return
       const objWidth = (obj.width || 0) * (obj.scaleX || 1)
       const objHeight = (obj.height || 0) * (obj.scaleY || 1)
+      const objLeft = obj.left || 0
       const objTop = obj.top || 0
+      const objRight = objLeft + objWidth
       const objBottom = objTop + objHeight
       
-      if (objTop < topUnsafeHeight) {
-        obj.top = topUnsafeHeight
+      // Only keep within canvas bounds
+      if (objLeft < 0) {
+        obj.left = 0
       }
-      if (objBottom > height - bottomUnsafeHeight) {
-        obj.top = Math.max(topUnsafeHeight, height - bottomUnsafeHeight - objHeight)
+      if (objRight > width) {
+        obj.left = width - objWidth
+      }
+      if (objTop < 0) {
+        obj.top = 0
+      }
+      if (objBottom > height) {
+        obj.top = height - objHeight
       }
     })
     
     canvas.renderAll()
   }, [currentFormat, canvas])
+
+  const handleZoomIn = () => {
+    if (!canvas) return
+    const currentZoom = canvas.getZoom()
+    const newZoom = Math.min(currentZoom * 1.2, 3) // Max 300%
+    canvas.setZoom(newZoom)
+    setZoomLevel(Math.round(newZoom * 100))
+    canvas.renderAll()
+  }
+
+  const handleZoomOut = () => {
+    if (!canvas) return
+    const currentZoom = canvas.getZoom()
+    const newZoom = Math.max(currentZoom / 1.2, 0.1) // Min 10%
+    canvas.setZoom(newZoom)
+    setZoomLevel(Math.round(newZoom * 100))
+    canvas.renderAll()
+  }
+
+  const handleZoomReset = () => {
+    if (!canvas) return
+    canvas.setZoom(1)
+    canvas.setViewportTransform([1, 0, 0, 1, 0, 0])
+    setZoomLevel(100)
+    canvas.renderAll()
+  }
 
   const handleExport = async (format, fileType) => {
     if (!canvas) return
@@ -419,35 +302,67 @@ const CanvasArea = () => {
   return (
     <div className="flex-1 flex flex-col bg-gradient-to-br from-slate-900/50 to-slate-800/50 overflow-hidden">
       {/* Canvas Toolbar */}
-      <div className="bg-gradient-to-r from-slate-800/80 to-slate-900/80 backdrop-blur-lg border-b border-neon-purple/30 px-2 sm:px-4 py-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0 shadow-neon-sm">
-        <div className="flex items-center gap-2">
-          <span className="text-xs sm:text-sm text-gray-300">Canvas:</span>
-          <span className="text-xs sm:text-sm font-medium bg-gradient-to-r from-neon-purple to-neon-cyan bg-clip-text text-transparent">{canvas?.width || 1080} × {canvas?.height || 1080}</span>
+      <div className="bg-gradient-to-r from-slate-800/90 to-slate-900/90 backdrop-blur-lg border-b border-neon-purple/30 px-4 sm:px-6 py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-neon-sm">
+        <div className="flex items-center gap-4 flex-wrap">
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-gray-400 font-medium">Canvas Size:</span>
+            <span className="text-sm font-bold bg-gradient-to-r from-neon-purple to-neon-cyan bg-clip-text text-transparent">{canvas?.width || 1080} × {canvas?.height || 1080}px</span>
+          </div>
+          
+          {/* Zoom Controls */}
+          <div className="flex items-center gap-2 border-l border-neon-purple/30 pl-4">
+            <span className="text-sm text-gray-400 font-medium hidden sm:inline">Zoom:</span>
+            <button
+              onClick={handleZoomOut}
+              className="p-2 bg-slate-700/50 hover:bg-slate-700 text-gray-300 rounded-lg transition-all duration-300 border border-neon-purple/30 hover:border-neon-purple/50 disabled:opacity-50"
+              disabled={!canvas || isLoading}
+              title="Zoom Out"
+            >
+              <ZoomOut size={16} />
+            </button>
+            <button
+              onClick={handleZoomReset}
+              className="px-3 py-2 bg-slate-700/50 hover:bg-slate-700 text-gray-300 rounded-lg transition-all duration-300 border border-neon-purple/30 hover:border-neon-purple/50 text-xs font-medium disabled:opacity-50"
+              disabled={!canvas || isLoading}
+              title="Reset Zoom"
+            >
+              {zoomLevel}%
+            </button>
+            <button
+              onClick={handleZoomIn}
+              className="p-2 bg-slate-700/50 hover:bg-slate-700 text-gray-300 rounded-lg transition-all duration-300 border border-neon-purple/30 hover:border-neon-purple/50 disabled:opacity-50"
+              disabled={!canvas || isLoading}
+              title="Zoom In"
+            >
+              <ZoomIn size={16} />
+            </button>
+          </div>
         </div>
-        <div className="flex gap-2 w-full sm:w-auto">
+        
+        <div className="flex gap-3 w-full sm:w-auto">
           <button
             onClick={() => handleExport(currentFormat, 'jpg')}
-            className="flex-1 sm:flex-none px-2 sm:px-3 py-1.5 bg-gradient-to-r from-neon-purple to-neon-cyan text-white rounded-xl text-xs sm:text-sm hover:from-neon-purple/90 hover:to-neon-cyan/90 flex items-center justify-center gap-1 disabled:opacity-50 transition-all duration-300 shadow-card hover:shadow-card-hover transform hover:scale-105"
+            className="flex-1 sm:flex-none px-4 py-2 bg-gradient-to-r from-neon-purple to-neon-cyan text-white rounded-lg text-sm hover:from-neon-purple/90 hover:to-neon-cyan/90 flex items-center justify-center gap-2 disabled:opacity-50 transition-all duration-300 shadow-card hover:shadow-card-hover transform hover:scale-[1.02] font-medium"
             disabled={isLoading}
             title="Export as JPG (< 500KB)"
           >
-            <Download size={14} />
+            <Download size={16} />
             <span className="hidden sm:inline">Export </span>JPG
           </button>
           <button
             onClick={() => handleExport(currentFormat, 'png')}
-            className="flex-1 sm:flex-none px-2 sm:px-3 py-1.5 bg-gradient-to-r from-neon-cyan to-neon-purple text-white rounded-xl text-xs sm:text-sm hover:from-neon-cyan/90 hover:to-neon-purple/90 flex items-center justify-center gap-1 disabled:opacity-50 transition-all duration-300 shadow-card hover:shadow-card-hover transform hover:scale-105"
+            className="flex-1 sm:flex-none px-4 py-2 bg-gradient-to-r from-neon-cyan to-neon-purple text-white rounded-lg text-sm hover:from-neon-cyan/90 hover:to-neon-purple/90 flex items-center justify-center gap-2 disabled:opacity-50 transition-all duration-300 shadow-card hover:shadow-card-hover transform hover:scale-[1.02] font-medium"
             disabled={isLoading}
             title="Export as PNG (< 500KB)"
           >
-            <Download size={14} />
+            <Download size={16} />
             <span className="hidden sm:inline">Export </span>PNG
           </button>
         </div>
       </div>
 
       {/* Canvas Container */}
-      <div className="flex-1 overflow-auto p-2 sm:p-4 relative">
+      <div className="flex-1 overflow-auto p-4 sm:p-6 relative">
         {isLoading && (
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
             <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-6 flex flex-col items-center gap-3 border border-neon-purple/30 shadow-neon-lg animate-fade-in">

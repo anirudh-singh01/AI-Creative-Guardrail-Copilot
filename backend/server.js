@@ -10,10 +10,10 @@ import dotenv from 'dotenv'
 import { checkCompliance, applyAutoFix } from './complianceChecker.js'
 import { getRetailRules } from './retailRules.js'
 
-dotenv.config()
-
+// Load environment variables
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
+dotenv.config({ path: path.join(__dirname, '.env') })
 
 const app = express()
 const PORT = process.env.PORT || 5000
@@ -262,7 +262,11 @@ app.post('/api/fix-copy', async (req, res) => {
                       process.env.OPENAI_API_KEY !== 'your-openai-api-key-here' &&
                       process.env.OPENAI_API_KEY !== 'your-api-key-here'
 
-    if (!hasOpenAI) {
+    // Check if Groq is configured (free alternative)
+    const hasGroq = process.env.GROQ_API_KEY && 
+                   process.env.GROQ_API_KEY !== 'your-groq-api-key-here'
+
+    if (!hasOpenAI && !hasGroq) {
       // Fallback: return sanitized version without LLM
       const text = headline || subhead || ''
       const sanitized = text
@@ -273,7 +277,7 @@ app.post('/api/fix-copy', async (req, res) => {
         success: true,
         correctedHeadline: headline ? sanitized : null,
         correctedSubhead: subhead ? sanitized : null,
-        message: 'Copy fixed (fallback mode - LLM not configured)'
+        message: 'Copy fixed (fallback mode - LLM not configured). Get free Groq API key at https://console.groq.com/keys'
       })
     }
 
@@ -311,23 +315,59 @@ ${textToFix}
 Return the corrected copy:`
 
     try {
-      const completion = await openai.chat.completions.create({
-        model: 'gpt-4',
-        messages: [
-          {
-            role: 'system',
-            content: systemPrompt
+      let correctedText
+      
+      if (hasGroq) {
+        // Use Groq API (free, very fast)
+        const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
+            'Content-Type': 'application/json',
           },
-          {
-            role: 'user',
-            content: userPrompt
-          }
-        ],
-        temperature: 0.3,
-        max_tokens: 200
-      })
+          body: JSON.stringify({
+            model: 'llama-3.1-70b-versatile', // Free model on Groq
+            messages: [
+              {
+                role: 'system',
+                content: systemPrompt
+              },
+              {
+                role: 'user',
+                content: userPrompt
+              }
+            ],
+            temperature: 0.3,
+            max_tokens: 200
+          })
+        })
 
-      const correctedText = completion.choices[0]?.message?.content?.trim() || textToFix
+        if (!groqResponse.ok) {
+          throw new Error(`Groq API error: ${groqResponse.statusText}`)
+        }
+
+        const groqData = await groqResponse.json()
+        correctedText = groqData.choices[0]?.message?.content?.trim() || textToFix
+      } else {
+        // Use OpenAI GPT-4
+        const completion = await openai.chat.completions.create({
+          model: 'gpt-4',
+          messages: [
+            {
+              role: 'system',
+              content: systemPrompt
+            },
+            {
+              role: 'user',
+              content: userPrompt
+            }
+          ],
+          temperature: 0.3,
+          max_tokens: 200
+        })
+
+        correctedText = completion.choices[0]?.message?.content?.trim() || textToFix
+      }
 
       // Parse corrected text back into headline/subhead if both were provided
       let correctedHeadline = headline
@@ -489,7 +529,7 @@ app.post('/api/export', async (req, res) => {
   }
 })
 
-// Text-to-image generation endpoint using DALL-E
+// Text-to-image generation endpoint using DALL-E or Hugging Face (free)
 app.post('/api/generate-image', async (req, res) => {
   try {
     const { prompt, size = '1024x1024', quality = 'standard', style = 'vivid' } = req.body
@@ -504,16 +544,42 @@ app.post('/api/generate-image', async (req, res) => {
                       process.env.OPENAI_API_KEY !== 'your-openai-api-key-here' &&
                       process.env.OPENAI_API_KEY !== 'your-api-key-here'
 
-    if (!hasOpenAI) {
+    // Check if Hugging Face is configured (free alternative)
+    const hfKey = process.env.HUGGINGFACE_API_KEY
+    const hasHuggingFace = hfKey && 
+                          hfKey !== 'your-huggingface-api-key-here' &&
+                          hfKey.trim().length > 0
+
+    // Check if Replicate is configured (more reliable free alternative)
+    const replicateKey = process.env.REPLICATE_API_TOKEN
+    const hasReplicate = replicateKey && 
+                        replicateKey !== 'your-replicate-api-token-here' &&
+                        replicateKey.trim().length > 0
+
+    // Debug logging
+    console.log('API Key Check:', {
+      hasOpenAI: !!hasOpenAI,
+      hasHuggingFace: !!hasHuggingFace,
+      hasReplicate: !!hasReplicate,
+      hfKeyPresent: !!hfKey,
+      hfKeyLength: hfKey ? hfKey.length : 0
+    })
+
+    // Use Replicate (most reliable), Hugging Face, or OpenAI
+    if (!hasOpenAI && !hasHuggingFace && !hasReplicate) {
       return res.status(400).json({ 
-        error: 'OpenAI API key not configured',
-        message: 'Please configure your OpenAI API key in backend/.env file'
+        error: 'No image generation API configured',
+        message: 'Please configure one of: OPENAI_API_KEY, HUGGINGFACE_API_KEY, or REPLICATE_API_TOKEN in backend/.env file. Get free Replicate API token at https://replicate.com/account/api-tokens (recommended - most reliable)'
       })
     }
 
     // Validate size (DALL-E 3 supports: 1024x1024, 1792x1024, 1024x1792)
+    // Hugging Face Stable Diffusion supports various sizes
     const validSizes = ['1024x1024', '1792x1024', '1024x1792']
     const imageSize = validSizes.includes(size) ? size : '1024x1024'
+    
+    // Parse dimensions for Hugging Face
+    const [width, height] = imageSize.split('x').map(Number)
 
     // Validate quality (standard or hd)
     const imageQuality = quality === 'hd' ? 'hd' : 'standard'
@@ -521,30 +587,245 @@ app.post('/api/generate-image', async (req, res) => {
     // Validate style (vivid or natural)
     const imageStyle = style === 'natural' ? 'natural' : 'vivid'
 
+    let imageBuffer
+    let imageUrl = null // For OpenAI responses
+
     try {
-      // Generate image using DALL-E 3
-      const response = await openai.images.generate({
-        model: 'dall-e-3',
-        prompt: prompt.trim(),
-        size: imageSize,
-        quality: imageQuality,
-        style: imageStyle,
-        n: 1, // DALL-E 3 only supports n=1
-      })
+      // Priority: Replicate (most reliable) > Hugging Face > OpenAI
+      if (hasReplicate) {
+        // Use Replicate API (free tier, very reliable)
+        console.log('Using Replicate API for image generation...')
+        
+        // Use Stable Diffusion XL model on Replicate
+        // Model version: stability-ai/sdxl (latest)
+        const replicateResponse = await fetch('https://api.replicate.com/v1/predictions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Token ${process.env.REPLICATE_API_TOKEN}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            version: '39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b', // SDXL model version
+            input: {
+              prompt: prompt.trim(),
+              width: width,
+              height: height,
+              num_inference_steps: imageQuality === 'hd' ? 50 : 30,
+              guidance_scale: imageStyle === 'vivid' ? 7.5 : 5.0,
+            }
+          })
+        })
+        
+        if (!replicateResponse.ok) {
+          const replicateError = await replicateResponse.text()
+          throw new Error(`Replicate API error: ${replicateError}`)
+        }
+        
+        const prediction = await replicateResponse.json()
+        console.log(`Replicate prediction created: ${prediction.id}`)
+        
+        // Poll for result (Replicate is async)
+        let result = null
+        let attempts = 0
+        const maxAttempts = 60 // 2 minutes max wait
+        
+        while (!result && attempts < maxAttempts) {
+          await new Promise(resolve => setTimeout(resolve, 2000)) // Wait 2 seconds
+          
+          const statusResponse = await fetch(`https://api.replicate.com/v1/predictions/${prediction.id}`, {
+            headers: {
+              'Authorization': `Token ${process.env.REPLICATE_API_TOKEN}`,
+            }
+          })
+          
+          const status = await statusResponse.json()
+          
+          if (status.status === 'succeeded' && status.output && status.output[0]) {
+            result = status.output[0]
+            break
+          } else if (status.status === 'failed') {
+            throw new Error(`Replicate prediction failed: ${status.error || 'Unknown error'}`)
+          }
+          
+          attempts++
+          console.log(`  Replicate status: ${status.status} (attempt ${attempts}/${maxAttempts})`)
+        }
+        
+        if (!result) {
+          throw new Error('Replicate prediction timed out')
+        }
+        
+        // Download the generated image
+        console.log(`Downloading image from Replicate: ${result}`)
+        const imageResponse = await fetch(result)
+        if (!imageResponse.ok) {
+          throw new Error('Failed to download image from Replicate')
+        }
+        
+        imageBuffer = Buffer.from(await imageResponse.arrayBuffer())
+        console.log('✅ Successfully generated image using Replicate API')
+        
+      } else if (hasHuggingFace) {
+        // Use Hugging Face Stable Diffusion API (free)
+        // Try multiple models and endpoints for reliability
+        const models = [
+          'runwayml/stable-diffusion-v1-5',  // More reliable, widely available
+          'stabilityai/stable-diffusion-xl-base-1.0',  // Higher quality
+          'CompVis/stable-diffusion-v1-4'  // Fallback
+        ]
+        
+        let lastError = null
+        // Note: imageBuffer is declared in outer scope, we'll set it here
+        
+        // Try each model until one works
+        // Since standard endpoint is deprecated, try router endpoint formats directly
+        for (const hfModel of models) {
+          try {
+            console.log(`Attempting Hugging Face image generation with model: ${hfModel}`)
+            
+            // Try multiple endpoint formats (router endpoint first since standard is deprecated)
+            const endpointFormats = [
+              // Try router endpoint formats first
+              `https://router.huggingface.co/hf-inference/models/${hfModel}`,
+              `https://router.huggingface.co/models/${hfModel}`,
+              // Fallback to standard endpoint (might still work for some models)
+              `https://api-inference.huggingface.co/models/${hfModel}`,
+            ]
+            
+            let modelSuccess = false
+            
+            for (const endpointUrl of endpointFormats) {
+              try {
+                console.log(`  Trying endpoint: ${endpointUrl}`)
+                
+                const hfResponse = await fetch(endpointUrl, {
+                  method: 'POST',
+                  headers: {
+                    'Authorization': `Bearer ${process.env.HUGGINGFACE_API_KEY}`,
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    inputs: prompt.trim(),
+                    parameters: {
+                      width: width,
+                      height: height,
+                      num_inference_steps: imageQuality === 'hd' ? 50 : 30,
+                      guidance_scale: imageStyle === 'vivid' ? 7.5 : 5.0,
+                    },
+                    options: {
+                      wait_for_model: true
+                    }
+                  })
+                })
+                
+                // Handle response
+                if (hfResponse.ok) {
+                  imageBuffer = Buffer.from(await hfResponse.arrayBuffer())
+                  console.log(`✅ Successfully generated image using: ${endpointUrl}`)
+                  modelSuccess = true
+                  break // Success, exit endpoint format loop
+                } else {
+                  const errorText = await hfResponse.text()
+                  const status = hfResponse.status
+                  
+                  // Skip deprecated endpoint errors, try next format
+                  if (status === 410 || errorText.includes('router.huggingface.co')) {
+                    console.log(`  Endpoint deprecated (${status}), trying next format...`)
+                    continue
+                  }
+                  
+                  // Handle model loading (503)
+                  if (status === 503) {
+                    console.log(`  Model is loading, waiting 15 seconds and retrying...`)
+                    await new Promise(resolve => setTimeout(resolve, 15000))
+                    
+                    const retryResponse = await fetch(endpointUrl, {
+                      method: 'POST',
+                      headers: {
+                        'Authorization': `Bearer ${process.env.HUGGINGFACE_API_KEY}`,
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify({
+                        inputs: prompt.trim(),
+                        parameters: {
+                          width: width,
+                          height: height,
+                          num_inference_steps: imageQuality === 'hd' ? 50 : 30,
+                          guidance_scale: imageStyle === 'vivid' ? 7.5 : 5.0,
+                        },
+                        options: {
+                          wait_for_model: true
+                        }
+                      })
+                    })
+                    
+                    if (retryResponse.ok) {
+                      imageBuffer = Buffer.from(await retryResponse.arrayBuffer())
+                      console.log(`✅ Successfully generated image after retry using: ${endpointUrl}`)
+                      modelSuccess = true
+                      break // Success, exit endpoint format loop
+                    } else {
+                      const retryError = await retryResponse.text()
+                      console.log(`  Retry failed (${retryResponse.status}): ${retryError.substring(0, 100)}`)
+                      continue // Try next endpoint format
+                    }
+                  } else {
+                    console.log(`  Endpoint failed (${status}): ${errorText.substring(0, 100)}`)
+                    lastError = { status, error: errorText, model: hfModel, endpoint: endpointUrl }
+                    continue // Try next endpoint format
+                  }
+                }
+              } catch (endpointError) {
+                console.log(`  Endpoint error: ${endpointError.message}`)
+                lastError = { error: endpointError.message, model: hfModel, endpoint: endpointUrl }
+                continue // Try next endpoint format
+              }
+            }
+            
+            if (modelSuccess) {
+              break // Success, exit model loop
+            } else {
+              console.log(`All endpoints failed for ${hfModel}, trying next model...`)
+              // Continue to next model
+            }
+          } catch (modelError) {
+            console.error(`Error with model ${hfModel}:`, modelError.message)
+            lastError = { error: modelError.message, model: hfModel }
+            // Continue to next model
+          }
+        }
+        
+        // If all models failed, throw error
+        if (!imageBuffer) {
+          throw new Error(`All Hugging Face models failed. Last error: ${JSON.stringify(lastError)}`)
+        }
+        
+        // imageBuffer is already set from the loop above, continue to save it
+      } else {
+        // Use OpenAI DALL-E 3
+        const response = await openai.images.generate({
+          model: 'dall-e-3',
+          prompt: prompt.trim(),
+          size: imageSize,
+          quality: imageQuality,
+          style: imageStyle,
+          n: 1,
+        })
 
-      const imageUrl = response.data[0]?.url
+        imageUrl = response.data[0]?.url
 
-      if (!imageUrl) {
-        throw new Error('No image URL returned from OpenAI')
+        if (!imageUrl) {
+          throw new Error('No image URL returned from OpenAI')
+        }
+
+        // Download the image and save it locally
+        const imageResponse = await fetch(imageUrl)
+        if (!imageResponse.ok) {
+          throw new Error('Failed to download generated image')
+        }
+
+        imageBuffer = Buffer.from(await imageResponse.arrayBuffer())
       }
-
-      // Download the image and save it locally
-      const imageResponse = await fetch(imageUrl)
-      if (!imageResponse.ok) {
-        throw new Error('Failed to download generated image')
-      }
-
-      const imageBuffer = Buffer.from(await imageResponse.arrayBuffer())
       
       // Generate unique filename
       const timestamp = Date.now()
@@ -561,7 +842,7 @@ app.post('/api/generate-image', async (req, res) => {
       res.json({
         success: true,
         url: fileUrl,
-        imageUrl: imageUrl, // Original OpenAI URL
+        imageUrl: imageUrl || fileUrl, // OpenAI URL or local file URL
         filename: filename,
         prompt: prompt,
         size: imageSize,

@@ -1,6 +1,6 @@
 import React, { useRef } from 'react'
 import { fabric } from 'fabric'
-import { Upload, Type, Square, Scissors, Layers, Sparkles, Wand2, X } from 'lucide-react'
+import { Upload, Type, Square, Scissors, Layers, Sparkles, Wand2, X, ChevronDown, ChevronUp } from 'lucide-react'
 import useStore from '../store/useStore'
 import { loadSampleCreative } from '../utils/sampleCreative'
 import api from '../services/api'
@@ -14,6 +14,22 @@ const LeftSidebar = () => {
   const [imageSize, setImageSize] = React.useState('1024x1024')
   const [imageQuality, setImageQuality] = React.useState('standard')
   const [imageStyle, setImageStyle] = React.useState('vivid')
+  
+  // Collapsible sections state
+  const [expandedSections, setExpandedSections] = React.useState({
+    upload: true,
+    elements: true,
+    ai: true,
+    styling: false,
+    layers: true
+  })
+  
+  const toggleSection = (section) => {
+    setExpandedSections(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }))
+  }
 
   const handleLoadSample = async () => {
     if (!canvas) {
@@ -99,17 +115,10 @@ const LeftSidebar = () => {
         
         img.scale(scale)
         
-        // Position in safe zone (avoiding top 200px and bottom 250px)
-        const topUnsafeHeight = 200
-        const bottomUnsafeHeight = 250
-        const safeTop = topUnsafeHeight
-        const safeBottom = canvas.height - bottomUnsafeHeight
-        const safeCenter = safeTop + (safeBottom - safeTop) / 2
-        
-        // Enable scaling and rotation
+        // Position in center of canvas (can be moved anywhere)
         img.set({
           left: canvas.width / 2 - (imgWidth * scale) / 2,
-          top: safeCenter - (imgHeight * scale) / 2,
+          top: canvas.height / 2 - (imgHeight * scale) / 2,
           hasControls: true,
           hasBorders: true,
           lockRotation: false,
@@ -135,16 +144,10 @@ const LeftSidebar = () => {
   const handleAddText = () => {
     if (!canvas) return
 
-    // Position in safe zone (avoiding top 200px and bottom 250px)
-    const topUnsafeHeight = 200
-    const bottomUnsafeHeight = 250
-    const safeTop = topUnsafeHeight
-    const safeBottom = canvas.height - bottomUnsafeHeight
-    const safeCenter = safeTop + (safeBottom - safeTop) / 2
-
+    // Position in center of canvas (can be moved anywhere)
     const text = new fabric.Textbox('Double click to edit', {
       left: canvas.width / 2,
-      top: safeCenter,
+      top: canvas.height / 2,
       fontSize: 40,
       fontFamily: 'Arial',
       fill: '#000000',
@@ -173,11 +176,10 @@ const LeftSidebar = () => {
       return
     }
 
-    // Position in safe zone (top safe area, below unsafe zone)
-    const topUnsafeHeight = 200
+    // Position in top-left area (can be moved anywhere)
     const tagText = new fabric.Textbox('Only at Tesco', {
       left: 50,
-      top: topUnsafeHeight + 20,
+      top: 50,
       fontSize: 24,
       fontFamily: 'Arial',
       fill: '#0066CC',
@@ -196,13 +198,7 @@ const LeftSidebar = () => {
   const handleAddShape = (shapeType) => {
     if (!canvas) return
 
-    // Position in safe zone (avoiding top 200px and bottom 250px)
-    const topUnsafeHeight = 200
-    const bottomUnsafeHeight = 250
-    const safeTop = topUnsafeHeight
-    const safeBottom = canvas.height - bottomUnsafeHeight
-    const safeCenter = safeTop + (safeBottom - safeTop) / 2
-
+    // Position in center of canvas (can be moved anywhere)
     let shape
     const size = 100
 
@@ -210,7 +206,7 @@ const LeftSidebar = () => {
       case 'rect':
         shape = new fabric.Rect({
           left: canvas.width / 2,
-          top: safeCenter,
+          top: canvas.height / 2,
           width: size,
           height: size,
           fill: '#FF0000',
@@ -221,7 +217,7 @@ const LeftSidebar = () => {
       case 'circle':
         shape = new fabric.Circle({
           left: canvas.width / 2,
-          top: safeCenter,
+          top: canvas.height / 2,
           radius: size / 2,
           fill: '#FF0000',
           originX: 'center',
@@ -231,7 +227,7 @@ const LeftSidebar = () => {
       case 'triangle':
         shape = new fabric.Triangle({
           left: canvas.width / 2,
-          top: safeCenter,
+          top: canvas.height / 2,
           width: size,
           height: size,
           fill: '#FF0000',
@@ -347,17 +343,17 @@ const LeftSidebar = () => {
 
   return (
     <div className="hidden md:flex w-64 lg:w-72 bg-gradient-to-b from-slate-800/90 to-slate-900/90 backdrop-blur-lg border-r border-neon-purple/30 flex-col overflow-y-auto shadow-neon-sm animate-slide-in">
-      <div className="p-4 border-b border-neon-purple/30">
-        <h2 className="text-lg font-bold bg-gradient-to-r from-neon-purple to-neon-cyan bg-clip-text text-transparent">Tools</h2>
+      <div className="p-5 border-b border-neon-purple/30 bg-gradient-to-r from-neon-purple/10 to-neon-cyan/10">
+        <h2 className="text-xl font-bold bg-gradient-to-r from-neon-purple to-neon-cyan bg-clip-text text-transparent">Tools</h2>
+        <p className="text-xs text-gray-400 mt-1">Design & edit tools</p>
       </div>
 
-      <div className="flex-1 p-4 space-y-6">
+      <div className="flex-1 p-5 space-y-5">
         {/* Sample Creative Section */}
-        <div className="space-y-2">
-          <h3 className="text-sm font-semibold text-gray-300 uppercase">Sample</h3>
+        <div className="space-y-3 pb-4 border-b border-neon-purple/20">
           <button
             onClick={handleLoadSample}
-            className="w-full px-4 py-2 bg-gradient-to-r from-neon-purple to-neon-cyan text-white rounded-xl hover:from-neon-purple/90 hover:to-neon-cyan/90 flex items-center gap-2 justify-center disabled:opacity-50 transition-all duration-300 shadow-card hover:shadow-card-hover transform hover:scale-105"
+            className="w-full px-4 py-3 bg-gradient-to-r from-neon-purple to-neon-cyan text-white rounded-xl hover:from-neon-purple/90 hover:to-neon-cyan/90 flex items-center gap-2 justify-center disabled:opacity-50 transition-all duration-300 shadow-card hover:shadow-card-hover transform hover:scale-[1.02] font-medium"
             disabled={!canvas || isLoading}
             title="Load sample creative with pre-loaded violations"
           >
@@ -367,142 +363,173 @@ const LeftSidebar = () => {
         </div>
 
         {/* Upload Section */}
-        <div className="space-y-2">
-          <h3 className="text-sm font-semibold text-gray-300 uppercase">Upload</h3>
-          <button
-            onClick={() => handleUpload('packshot')}
-            className="w-full px-4 py-2 bg-gradient-to-r from-neon-cyan to-neon-purple text-white rounded-xl hover:from-neon-cyan/90 hover:to-neon-purple/90 flex items-center gap-2 justify-center transition-all duration-300 shadow-card hover:shadow-card-hover transform hover:scale-105"
-          >
-            <Upload size={18} />
-            Upload Packshot
-          </button>
-          <input
-            ref={packshotInputRef}
-            type="file"
-            accept="image/jpeg,image/jpg,image/png,.jpg,.jpeg,.png"
-            onChange={(e) => handleFileChange(e, 'packshot')}
-            className="hidden"
-          />
-          <button
-            onClick={() => handleUpload('background')}
-            className="w-full px-4 py-2 bg-gradient-to-r from-neon-purple to-neon-cyan text-white rounded-xl hover:from-neon-purple/90 hover:to-neon-cyan/90 flex items-center gap-2 justify-center transition-all duration-300 shadow-card hover:shadow-card-hover transform hover:scale-105"
-          >
-            <Upload size={18} />
-            Upload Background
-          </button>
-          <input
-            ref={backgroundInputRef}
-            type="file"
-            accept="image/jpeg,image/jpg,image/png,.jpg,.jpeg,.png"
-            onChange={(e) => handleFileChange(e, 'background')}
-            className="hidden"
-          />
-        </div>
+        <CollapsibleSection
+          title="Upload"
+          icon={<Upload size={16} />}
+          isExpanded={expandedSections.upload}
+          onToggle={() => toggleSection('upload')}
+        >
+          <div className="space-y-3 pt-2">
+            <button
+              onClick={() => handleUpload('packshot')}
+              className="w-full px-4 py-2.5 bg-gradient-to-r from-neon-cyan to-neon-purple text-white rounded-lg hover:from-neon-cyan/90 hover:to-neon-purple/90 flex items-center gap-2 justify-center transition-all duration-300 shadow-card hover:shadow-card-hover transform hover:scale-[1.02] text-sm font-medium"
+            >
+              <Upload size={16} />
+              Upload Packshot
+            </button>
+            <input
+              ref={packshotInputRef}
+              type="file"
+              accept="image/jpeg,image/jpg,image/png,.jpg,.jpeg,.png"
+              onChange={(e) => handleFileChange(e, 'packshot')}
+              className="hidden"
+            />
+            <button
+              onClick={() => handleUpload('background')}
+              className="w-full px-4 py-2.5 bg-gradient-to-r from-neon-purple to-neon-cyan text-white rounded-lg hover:from-neon-purple/90 hover:to-neon-cyan/90 flex items-center gap-2 justify-center transition-all duration-300 shadow-card hover:shadow-card-hover transform hover:scale-[1.02] text-sm font-medium"
+            >
+              <Upload size={16} />
+              Upload Background
+            </button>
+            <input
+              ref={backgroundInputRef}
+              type="file"
+              accept="image/jpeg,image/jpg,image/png,.jpg,.jpeg,.png"
+              onChange={(e) => handleFileChange(e, 'background')}
+              className="hidden"
+            />
+          </div>
+        </CollapsibleSection>
 
         {/* Add Elements */}
-        <div className="space-y-2">
-          <h3 className="text-sm font-semibold text-gray-300 uppercase">Add Elements</h3>
-          <button
-            onClick={handleAddText}
-            className="w-full px-4 py-2 bg-gradient-to-r from-neon-yellow/80 to-neon-cyan text-gray-900 rounded-xl hover:from-neon-yellow hover:to-neon-cyan flex items-center gap-2 justify-center transition-all duration-300 shadow-card hover:shadow-card-hover transform hover:scale-105 font-semibold"
-          >
-            <Type size={18} />
-            Add Text
-          </button>
-          <button
-            onClick={handleAddTagText}
-            className="w-full px-4 py-2 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-xl hover:from-blue-600 hover:to-cyan-600 flex items-center gap-2 justify-center transition-all duration-300 shadow-card hover:shadow-card-hover transform hover:scale-105"
-            title="Add required TAG text (Only at Tesco)"
-          >
-            <Type size={18} />
-            Add TAG Text
-          </button>
-          <div className="grid grid-cols-3 gap-2">
+        <CollapsibleSection
+          title="Add Elements"
+          icon={<Type size={16} />}
+          isExpanded={expandedSections.elements}
+          onToggle={() => toggleSection('elements')}
+        >
+          <div className="space-y-3 pt-2">
             <button
-              onClick={() => handleAddShape('rect')}
-              className="px-3 py-2 bg-slate-700/50 hover:bg-slate-700 rounded-xl flex items-center justify-center transition-all duration-300 shadow-card hover:shadow-neon-sm border border-neon-purple/30"
-              title="Rectangle"
+              onClick={handleAddText}
+              className="w-full px-4 py-2.5 bg-gradient-to-r from-neon-yellow/80 to-neon-cyan text-gray-900 rounded-lg hover:from-neon-yellow hover:to-neon-cyan flex items-center gap-2 justify-center transition-all duration-300 shadow-card hover:shadow-card-hover transform hover:scale-[1.02] font-semibold text-sm"
             >
-              <Square size={20} className="text-neon-cyan" />
+              <Type size={16} />
+              Add Text
             </button>
             <button
-              onClick={() => handleAddShape('circle')}
-              className="px-3 py-2 bg-slate-700/50 hover:bg-slate-700 rounded-xl flex items-center justify-center transition-all duration-300 shadow-card hover:shadow-neon-sm border border-neon-purple/30"
-              title="Circle"
+              onClick={handleAddTagText}
+              className="w-full px-4 py-2.5 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-lg hover:from-blue-600 hover:to-cyan-600 flex items-center gap-2 justify-center transition-all duration-300 shadow-card hover:shadow-card-hover transform hover:scale-[1.02] text-sm font-medium"
+              title="Add required TAG text (Only at Tesco)"
             >
-              <div className="w-5 h-5 rounded-full border-2 border-neon-cyan"></div>
+              <Type size={16} />
+              Add TAG Text
             </button>
-            <button
-              onClick={() => handleAddShape('triangle')}
-              className="px-3 py-2 bg-slate-700/50 hover:bg-slate-700 rounded-xl flex items-center justify-center transition-all duration-300 shadow-card hover:shadow-neon-sm border border-neon-purple/30"
-              title="Triangle"
-            >
-              <div className="w-0 h-0 border-l-[6px] border-r-[6px] border-b-[10px] border-l-transparent border-r-transparent border-b-neon-cyan"></div>
-            </button>
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                onClick={() => handleAddShape('rect')}
+                className="px-3 py-2.5 bg-slate-700/50 hover:bg-slate-700 rounded-lg flex items-center justify-center transition-all duration-300 shadow-card hover:shadow-neon-sm border border-neon-purple/30"
+                title="Rectangle"
+              >
+                <Square size={18} className="text-neon-cyan" />
+              </button>
+              <button
+                onClick={() => handleAddShape('circle')}
+                className="px-3 py-2.5 bg-slate-700/50 hover:bg-slate-700 rounded-lg flex items-center justify-center transition-all duration-300 shadow-card hover:shadow-neon-sm border border-neon-purple/30"
+                title="Circle"
+              >
+                <div className="w-4 h-4 rounded-full border-2 border-neon-cyan"></div>
+              </button>
+              <button
+                onClick={() => handleAddShape('triangle')}
+                className="px-3 py-2.5 bg-slate-700/50 hover:bg-slate-700 rounded-lg flex items-center justify-center transition-all duration-300 shadow-card hover:shadow-neon-sm border border-neon-purple/30"
+                title="Triangle"
+              >
+                <div className="w-0 h-0 border-l-[5px] border-r-[5px] border-b-[8px] border-l-transparent border-r-transparent border-b-neon-cyan"></div>
+              </button>
+            </div>
           </div>
-        </div>
+        </CollapsibleSection>
 
         {/* AI Image Generation */}
-        <div className="space-y-2">
-          <h3 className="text-sm font-semibold text-gray-300 uppercase">AI Tools</h3>
-          <button
-            onClick={() => setShowImageGenerator(true)}
-            className="w-full px-4 py-2 bg-gradient-to-r from-purple-500 via-pink-500 to-purple-500 text-white rounded-xl hover:from-purple-600 hover:via-pink-600 hover:to-purple-600 flex items-center gap-2 justify-center transition-all duration-300 shadow-card hover:shadow-card-hover transform hover:scale-105 disabled:opacity-50"
-            disabled={isLoading}
-          >
-            <Wand2 size={18} />
-            Generate Image (AI)
-          </button>
-          <button
-            onClick={handleRemoveBackground}
-            className="w-full px-4 py-2 bg-gradient-to-r from-orange-500 to-pink-500 text-white rounded-xl hover:from-orange-600 hover:to-pink-600 flex items-center gap-2 justify-center transition-all duration-300 shadow-card hover:shadow-card-hover transform hover:scale-105 disabled:opacity-50"
-            disabled={isLoading}
-          >
-            <Scissors size={18} />
-            Remove Background
-          </button>
-        </div>
-
-        {/* Color Palette */}
-        <div className="space-y-2">
-          <h3 className="text-sm font-semibold text-gray-300 uppercase">Color Palette</h3>
-          <div className="grid grid-cols-4 gap-2">
-            {colors.map((color, index) => (
-              <button
-                key={index}
-                onClick={() => handleColorSelect(color)}
-                className="w-10 h-10 rounded-xl border-2 border-gray-600 hover:border-neon-cyan transition-all duration-300 shadow-card hover:shadow-neon-sm transform hover:scale-110"
-                style={{ backgroundColor: color }}
-                title={color}
-              />
-            ))}
+        <CollapsibleSection
+          title="AI Tools"
+          icon={<Wand2 size={16} />}
+          isExpanded={expandedSections.ai}
+          onToggle={() => toggleSection('ai')}
+        >
+          <div className="space-y-3 pt-2">
+            <button
+              onClick={() => setShowImageGenerator(true)}
+              className="w-full px-4 py-2.5 bg-gradient-to-r from-purple-500 via-pink-500 to-purple-500 text-white rounded-lg hover:from-purple-600 hover:via-pink-600 hover:to-purple-600 flex items-center gap-2 justify-center transition-all duration-300 shadow-card hover:shadow-card-hover transform hover:scale-[1.02] disabled:opacity-50 text-sm font-medium"
+              disabled={isLoading}
+            >
+              <Wand2 size={16} />
+              Generate Image (AI)
+            </button>
+            <button
+              onClick={handleRemoveBackground}
+              className="w-full px-4 py-2.5 bg-gradient-to-r from-orange-500 to-pink-500 text-white rounded-lg hover:from-orange-600 hover:to-pink-600 flex items-center gap-2 justify-center transition-all duration-300 shadow-card hover:shadow-card-hover transform hover:scale-[1.02] disabled:opacity-50 text-sm font-medium"
+              disabled={isLoading}
+            >
+              <Scissors size={16} />
+              Remove Background
+            </button>
           </div>
-        </div>
+        </CollapsibleSection>
 
-        {/* Font Selector */}
-        <div className="space-y-2">
-          <h3 className="text-sm font-semibold text-gray-300 uppercase">Font</h3>
-          <select
-            onChange={(e) => handleFontSelect(e.target.value)}
-            className="w-full px-3 py-2 bg-slate-700/50 border border-neon-purple/30 text-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-neon-cyan focus:border-neon-cyan transition-all duration-300 shadow-card"
-            defaultValue="Arial"
-          >
-            {fonts.map((font) => (
-              <option key={font} value={font} style={{ fontFamily: font }}>
-                {font}
-              </option>
-            ))}
-          </select>
-        </div>
+        {/* Styling Section */}
+        <CollapsibleSection
+          title="Styling"
+          icon={<Square size={16} />}
+          isExpanded={expandedSections.styling}
+          onToggle={() => toggleSection('styling')}
+        >
+          <div className="space-y-4 pt-2">
+            {/* Color Palette */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-medium text-gray-400 uppercase tracking-wider">Colors</h4>
+              <div className="grid grid-cols-4 gap-2">
+                {colors.map((color, index) => (
+                  <button
+                    key={index}
+                    onClick={() => handleColorSelect(color)}
+                    className="w-9 h-9 rounded-lg border-2 border-gray-600 hover:border-neon-cyan transition-all duration-300 shadow-card hover:shadow-neon-sm transform hover:scale-110"
+                    style={{ backgroundColor: color }}
+                    title={color}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Font Selector */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-medium text-gray-400 uppercase tracking-wider">Font</h4>
+              <select
+                onChange={(e) => handleFontSelect(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-700/50 border border-neon-purple/30 text-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-neon-cyan focus:border-neon-cyan transition-all duration-300 shadow-card text-sm"
+                defaultValue="Arial"
+              >
+                {fonts.map((font) => (
+                  <option key={font} value={font} style={{ fontFamily: font }}>
+                    {font}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </CollapsibleSection>
 
         {/* Layer List */}
-        <div className="space-y-2">
-          <h3 className="text-sm font-semibold text-gray-300 uppercase flex items-center gap-2">
-            <Layers size={16} className="text-neon-cyan" />
-            Layers
-          </h3>
-          <LayerList />
-        </div>
+        <CollapsibleSection
+          title="Layers"
+          icon={<Layers size={16} />}
+          isExpanded={expandedSections.layers}
+          onToggle={() => toggleSection('layers')}
+        >
+          <div className="pt-2">
+            <LayerList />
+          </div>
+        </CollapsibleSection>
       </div>
 
       {/* Text-to-Image Generator Modal */}
@@ -576,16 +603,10 @@ const ImageGeneratorModal = ({ prompt, setPrompt, size, setSize, quality, setQua
           
           img.scale(scale)
           
-          // Position in safe zone
-          const topUnsafeHeight = 200
-          const bottomUnsafeHeight = 250
-          const safeTop = topUnsafeHeight
-          const safeBottom = canvas.height - bottomUnsafeHeight
-          const safeCenter = safeTop + (safeBottom - safeTop) / 2
-          
+          // Position in center of canvas (can be moved anywhere)
           img.set({
             left: canvas.width / 2 - (img.width * scale) / 2,
-            top: safeCenter - (img.height * scale) / 2,
+            top: canvas.height / 2 - (img.height * scale) / 2,
             hasControls: true,
             hasBorders: true,
             lockRotation: false,
@@ -804,24 +825,16 @@ const LayerList = () => {
     }
   }, [canvas])
 
-  if (!canvas) {
+  if (!canvas || objects.length === 0) {
     return (
-      <div className="text-sm text-gray-400 p-2">
-        No layers yet
-      </div>
-    )
-  }
-
-  if (objects.length === 0) {
-    return (
-      <div className="text-sm text-gray-400 p-2">
+      <div className="text-sm text-gray-400 p-3 text-center italic">
         No layers yet
       </div>
     )
   }
 
   return (
-    <div className="space-y-1 max-h-48 overflow-y-auto">
+    <div className="space-y-1.5 max-h-64 overflow-y-auto">
       {objects.map((obj, index) => (
         <div
           key={obj.name || `obj-${index}`}
@@ -830,13 +843,13 @@ const LayerList = () => {
             canvas.renderAll()
             setSelectedObject(obj)
           }}
-          className={`p-2 rounded-xl cursor-pointer text-sm flex items-center justify-between transition-all duration-300 ${
+          className={`p-2.5 rounded-lg cursor-pointer text-sm flex items-center justify-between transition-all duration-300 ${
             selectedObject === obj
-              ? 'bg-gradient-to-r from-neon-purple/30 to-neon-cyan/30 border-2 border-neon-cyan shadow-neon-sm text-gray-100'
-              : 'bg-slate-700/30 hover:bg-slate-700/50 border-2 border-transparent hover:border-neon-purple/30 text-gray-300'
+              ? 'bg-gradient-to-r from-neon-purple/30 to-neon-cyan/30 border border-neon-cyan shadow-neon-sm text-gray-100'
+              : 'bg-slate-700/30 hover:bg-slate-700/50 border border-transparent hover:border-neon-purple/30 text-gray-300'
           }`}
         >
-          <span className="truncate">
+          <span className="truncate flex-1">
             {obj.type === 'textbox' ? `Text: ${obj.text?.substring(0, 20)}` : 
              obj.type === 'image' ? 'Image' :
              obj.type === 'rect' ? 'Rectangle' :
@@ -853,12 +866,40 @@ const LayerList = () => {
                 setSelectedObject(null)
               }
             }}
-            className="text-red-400 hover:text-red-300 ml-2 transition-colors duration-200"
+            className="text-red-400 hover:text-red-300 ml-2 transition-colors duration-200 text-lg leading-none"
+            title="Delete layer"
           >
             ×
           </button>
         </div>
       ))}
+    </div>
+  )
+}
+
+// Collapsible Section Component
+const CollapsibleSection = ({ title, icon, isExpanded, onToggle, children }) => {
+  return (
+    <div className="border-b border-neon-purple/20 pb-4 last:border-b-0">
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center justify-between text-sm font-semibold text-gray-300 uppercase tracking-wider mb-2 hover:text-neon-cyan transition-colors duration-200"
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-neon-cyan">{icon}</span>
+          <span>{title}</span>
+        </div>
+        {isExpanded ? (
+          <ChevronUp size={16} className="text-gray-400" />
+        ) : (
+          <ChevronDown size={16} className="text-gray-400" />
+        )}
+      </button>
+      {isExpanded && (
+        <div className="animate-fade-in">
+          {children}
+        </div>
+      )}
     </div>
   )
 }

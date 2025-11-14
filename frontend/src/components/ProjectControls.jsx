@@ -100,35 +100,33 @@ const ProjectControls = () => {
   }
 
   return (
-    <div className="flex items-center gap-1 sm:gap-2 w-full sm:w-auto">
+    <div className="flex items-center gap-2 w-full sm:w-auto">
       <button
         onClick={handleSave}
-        className="flex-1 sm:flex-none px-2 sm:px-3 py-1.5 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-xl text-xs sm:text-sm hover:from-green-600 hover:to-emerald-600 flex items-center justify-center gap-1 sm:gap-1.5 disabled:opacity-50 transition-all duration-300 shadow-card hover:shadow-card-hover transform hover:scale-105"
+        className="flex-1 sm:flex-none px-3 sm:px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-lg text-xs sm:text-sm hover:from-green-600 hover:to-emerald-600 flex items-center justify-center gap-1.5 disabled:opacity-50 transition-all duration-300 shadow-card hover:shadow-card-hover transform hover:scale-[1.02] font-medium"
         disabled={!canvas || isLoading}
         title="Save project to browser storage"
       >
-        <Save size={14} className="sm:w-4 sm:h-4" />
-        <span className="hidden sm:inline">Save Project</span>
-        <span className="sm:hidden">Save</span>
+        <Save size={16} />
+        <span className="hidden sm:inline">Save</span>
       </button>
       <button
         onClick={handleLoad}
-        className="flex-1 sm:flex-none px-2 sm:px-3 py-1.5 bg-gradient-to-r from-neon-cyan to-neon-purple text-white rounded-xl text-xs sm:text-sm hover:from-neon-cyan/90 hover:to-neon-purple/90 flex items-center justify-center gap-1 sm:gap-1.5 disabled:opacity-50 transition-all duration-300 shadow-card hover:shadow-card-hover transform hover:scale-105"
+        className="flex-1 sm:flex-none px-3 sm:px-4 py-2 bg-gradient-to-r from-neon-cyan to-neon-purple text-white rounded-lg text-xs sm:text-sm hover:from-neon-cyan/90 hover:to-neon-purple/90 flex items-center justify-center gap-1.5 disabled:opacity-50 transition-all duration-300 shadow-card hover:shadow-card-hover transform hover:scale-[1.02] font-medium"
         disabled={!canvas || isLoading}
         title="Load saved project"
       >
-        <FolderOpen size={14} className="sm:w-4 sm:h-4" />
-        <span className="hidden sm:inline">Load Project</span>
-        <span className="sm:hidden">Load</span>
+        <FolderOpen size={16} />
+        <span className="hidden sm:inline">Load</span>
       </button>
       {hasProject && (
         <button
           onClick={handleDelete}
-          className="px-2 sm:px-3 py-1.5 bg-gradient-to-r from-red-500 to-pink-500 text-white rounded-xl text-xs sm:text-sm hover:from-red-600 hover:to-pink-600 flex items-center justify-center gap-1 sm:gap-1.5 disabled:opacity-50 transition-all duration-300 shadow-card hover:shadow-card-hover transform hover:scale-105"
+          className="px-3 sm:px-4 py-2 bg-gradient-to-r from-red-500 to-pink-500 text-white rounded-lg text-xs sm:text-sm hover:from-red-600 hover:to-pink-600 flex items-center justify-center gap-1.5 disabled:opacity-50 transition-all duration-300 shadow-card hover:shadow-card-hover transform hover:scale-[1.02]"
           disabled={isLoading}
           title="Delete saved project"
         >
-          <Trash2 size={14} className="sm:w-4 sm:h-4" />
+          <Trash2 size={16} />
         </button>
       )}
     </div>

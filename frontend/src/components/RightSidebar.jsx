@@ -1,5 +1,5 @@
 import useStore from '../store/useStore'
-import { AlertCircle, CheckCircle2, Wrench, Plus } from 'lucide-react'
+import { AlertCircle, CheckCircle2, Wrench, Plus, Square } from 'lucide-react'
 import api from '../services/api'
 import { useEffect, useState } from 'react'
 import { fabric } from 'fabric'
@@ -63,37 +63,62 @@ const RightSidebar = () => {
   }
 
   useEffect(() => {
-    // Auto-check compliance when canvas changes
-    if (canvas) {
-      const checkCompliance = async () => {
-        setIsChecking(true)
-        try {
-          const canvasData = canvas.toJSON()
-          const response = await fetch('/api/check-compliance', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ canvasData }),
-          })
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`)
-          }
-          const result = await response.json()
-          setComplianceIssues(result.issues || [])
-        } catch (error) {
-          console.error('Compliance check failed:', error)
-        } finally {
-          setIsChecking(false)
-        }
-      }
+    // Auto-check compliance when canvas or objects change
+    if (!canvas) return
 
-      // Debounce compliance checking
-      const timeoutId = setTimeout(() => {
+    let debounceTimeout = null
+
+    const checkCompliance = async () => {
+      setIsChecking(true)
+      try {
+        const canvasData = canvas.toJSON()
+        const response = await fetch('/api/check-compliance', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ canvasData }),
+        })
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`)
+        }
+        const result = await response.json()
+        setComplianceIssues(result.issues || [])
+      } catch (error) {
+        console.error('Compliance check failed:', error)
+      } finally {
+        setIsChecking(false)
+      }
+    }
+
+    const debouncedCheck = () => {
+      if (debounceTimeout) {
+        clearTimeout(debounceTimeout)
+      }
+      debounceTimeout = setTimeout(() => {
         checkCompliance()
       }, 1000)
-
-      return () => clearTimeout(timeoutId)
     }
-  }, [canvas]) // setComplianceIssues is stable from Zustand, no need to include
+
+    // Initial check
+    debouncedCheck()
+
+    // Listen to canvas events for real-time compliance checking
+    canvas.on('object:added', debouncedCheck)
+    canvas.on('object:removed', debouncedCheck)
+    canvas.on('object:modified', debouncedCheck)
+    canvas.on('object:moving', debouncedCheck)
+    canvas.on('object:scaling', debouncedCheck)
+
+    return () => {
+      if (debounceTimeout) {
+        clearTimeout(debounceTimeout)
+      }
+      canvas.off('object:added', debouncedCheck)
+      canvas.off('object:removed', debouncedCheck)
+      canvas.off('object:modified', debouncedCheck)
+      canvas.off('object:moving', debouncedCheck)
+      canvas.off('object:scaling', debouncedCheck)
+    }
+  }, [canvas, setComplianceIssues])
 
   const handleFixAll = async () => {
     if (!canvas || complianceIssues.length === 0) return
@@ -157,25 +182,26 @@ const RightSidebar = () => {
     <div className="hidden lg:flex w-80 xl:w-96 bg-gradient-to-b from-slate-800/90 to-slate-900/90 backdrop-blur-lg border-l border-neon-purple/30 flex-col overflow-hidden shadow-neon-sm animate-slide-in">
       {/* Compliance Checker Section */}
       <div className="flex-shrink-0 border-b border-neon-purple/30">
-        <div className="p-4 border-b border-neon-purple/30">
+        <div className="p-5 border-b border-neon-purple/30 bg-gradient-to-r from-neon-purple/10 to-neon-cyan/10">
           <h2 className="text-xl font-bold bg-gradient-to-r from-neon-purple to-neon-cyan bg-clip-text text-transparent">Compliance Checker</h2>
-          <p className="text-sm text-gray-300 mt-1">
+          <p className="text-xs text-gray-400 mt-1">
             Real-time AI analysis
           </p>
         </div>
 
-        <div className="p-4 max-h-64 overflow-y-auto">
+        <div className="p-5 max-h-72 overflow-y-auto">
           {isChecking ? (
-            <div className="flex items-center justify-center py-4">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-neon-cyan border-t-transparent"></div>
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-neon-cyan border-t-transparent"></div>
             </div>
           ) : complianceIssues.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-4 text-gray-400">
-              <CheckCircle2 size={32} className="mb-2 text-neon-cyan" />
-              <p className="text-sm">No issues found</p>
+            <div className="flex flex-col items-center justify-center py-8 text-gray-400">
+              <CheckCircle2 size={40} className="mb-3 text-neon-cyan" />
+              <p className="text-sm font-medium">No issues found</p>
+              <p className="text-xs mt-1 text-gray-500">Your creative is compliant!</p>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-3">
               {complianceIssues.map((issue, index) => {
                 const severityColor = issue.severity === 'high' 
                   ? 'bg-red-900/30 border-red-500/50' 
@@ -192,31 +218,33 @@ const RightSidebar = () => {
                 return (
                   <div
                     key={issue.id || index}
-                    className={`p-3 ${severityColor} border rounded-xl shadow-card animate-fade-in`}
+                    className={`p-3.5 ${severityColor} border rounded-lg shadow-card animate-fade-in`}
                   >
-                    <div className="flex items-start gap-2">
+                    <div className="flex items-start gap-2.5">
                       <AlertCircle size={18} className={`${severityTextColor} mt-0.5 flex-shrink-0`} />
-                      <div className="flex-1">
-                        <p className={`font-semibold ${severityTextColor} text-sm`}>
+                      <div className="flex-1 min-w-0">
+                        <p className={`font-semibold ${severityTextColor} text-sm mb-1`}>
                           {issue.id?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Violation'}
                         </p>
-                        <p className={`${severityTextColor} text-xs mt-1`}>
+                        <p className={`${severityTextColor} text-xs leading-relaxed`}>
                           {issue.message}
                         </p>
                         {issue.fix && (
-                          <p className="text-gray-400 text-xs mt-1 italic">
+                          <p className="text-gray-400 text-xs mt-2 italic">
                             Fix: {issue.fix.replace(/_/g, ' ')}
                           </p>
                         )}
-                        {issue.severity && (
-                          <span className={`inline-block mt-2 px-2 py-0.5 ${severityColor} ${severityTextColor} text-xs rounded-lg border`}>
-                            {issue.severity.toUpperCase()}
-                          </span>
-                        )}
+                        <div className="flex items-center gap-2 mt-2.5">
+                          {issue.severity && (
+                            <span className={`inline-block px-2 py-0.5 ${severityColor} ${severityTextColor} text-xs rounded-md border font-medium`}>
+                              {issue.severity.toUpperCase()}
+                            </span>
+                          )}
+                        </div>
                         {issue.id === 'missing_tag_text' && (
                           <button
                             onClick={handleQuickAddTagText}
-                            className="mt-2 w-full px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs flex items-center justify-center gap-1 transition-all duration-300"
+                            className="mt-3 w-full px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs flex items-center justify-center gap-1.5 transition-all duration-300 font-medium shadow-card hover:shadow-card-hover transform hover:scale-[1.02]"
                           >
                             <Plus size={14} />
                             Quick Add TAG Text
@@ -232,13 +260,13 @@ const RightSidebar = () => {
         </div>
 
         {complianceIssues.length > 0 && (
-          <div className="p-4 border-t border-neon-purple/30">
+          <div className="p-5 border-t border-neon-purple/30">
             <button
               onClick={handleFixAll}
-              className="w-full px-4 py-3 bg-gradient-to-r from-neon-purple to-neon-cyan text-white rounded-xl hover:from-neon-purple/90 hover:to-neon-cyan/90 flex items-center justify-center gap-2 font-semibold transition-all duration-300 shadow-card hover:shadow-card-hover transform hover:scale-105"
+              className="w-full px-4 py-3 bg-gradient-to-r from-neon-purple to-neon-cyan text-white rounded-lg hover:from-neon-purple/90 hover:to-neon-cyan/90 flex items-center justify-center gap-2 font-semibold transition-all duration-300 shadow-card hover:shadow-card-hover transform hover:scale-[1.02] text-sm"
             >
               <Wrench size={18} />
-              Fix All
+              Fix All Issues
             </button>
           </div>
         )}
@@ -246,9 +274,9 @@ const RightSidebar = () => {
 
       {/* Object Attributes Section */}
       <div className="flex-1 overflow-y-auto">
-        <div className="p-4 border-b border-neon-purple/30">
+        <div className="p-5 border-b border-neon-purple/30 bg-gradient-to-r from-neon-purple/10 to-neon-cyan/10">
           <h2 className="text-xl font-bold bg-gradient-to-r from-neon-purple to-neon-cyan bg-clip-text text-transparent">Properties</h2>
-          <p className="text-sm text-gray-300 mt-1">
+          <p className="text-xs text-gray-400 mt-1">
             Selected object attributes
           </p>
         </div>
@@ -256,9 +284,12 @@ const RightSidebar = () => {
         {selectedObject ? (
           <ObjectAttributes object={selectedObject} canvas={canvas} />
         ) : (
-          <div className="p-4 text-center text-gray-400">
-            <p className="text-sm">No object selected</p>
-            <p className="text-xs mt-1">Click an object to edit properties</p>
+          <div className="p-8 text-center text-gray-400">
+            <div className="mb-3 opacity-50">
+              <Square size={48} className="mx-auto text-neon-purple/30" />
+            </div>
+            <p className="text-sm font-medium">No object selected</p>
+            <p className="text-xs mt-1.5 text-gray-500">Click an object on the canvas to edit its properties</p>
           </div>
         )}
       </div>
@@ -297,9 +328,44 @@ const ObjectAttributes = ({ object, canvas }) => {
     }
   }, [object])
 
-  const updateAttribute = (key, value) => {
+  const updateAttribute = (key, value, skipUpdate = false) => {
     if (!object || !canvas) return
 
+    // For width/height, only update attributes if we have a valid value
+    // This prevents the image from disappearing when user deletes numbers
+    if (key === 'width' || key === 'height') {
+      const numValue = parseFloat(value)
+      // Only update state if value is empty (for typing) or valid positive number
+      if (value === '' || (!isNaN(numValue) && numValue > 0)) {
+        setAttributes(prev => ({ ...prev, [key]: value === '' ? '' : numValue }))
+      }
+      
+      // Only update the object scale if we have a valid positive number
+      if (!skipUpdate && value !== '' && !isNaN(numValue) && numValue > 0) {
+        if (key === 'width') {
+          const objectWidth = object.width || 1
+          if (objectWidth > 0) {
+            const scaleX = numValue / objectWidth
+            if (scaleX > 0 && scaleX <= 10) {
+              object.set('scaleX', scaleX)
+              canvas.renderAll()
+            }
+          }
+        } else if (key === 'height') {
+          const objectHeight = object.height || 1
+          if (objectHeight > 0) {
+            const scaleY = numValue / objectHeight
+            if (scaleY > 0 && scaleY <= 10) {
+              object.set('scaleY', scaleY)
+              canvas.renderAll()
+            }
+          }
+        }
+      }
+      return // Early return for width/height
+    }
+
+    // For other attributes, update normally
     const newAttributes = { ...attributes, [key]: value }
     setAttributes(newAttributes)
 
@@ -318,20 +384,6 @@ const ObjectAttributes = ({ object, canvas }) => {
         break
       case 'top':
         object.set('top', parseFloat(value) || 0)
-        break
-      case 'width':
-        const objectWidth = object.width || 1
-        if (objectWidth > 0) {
-          const scaleX = parseFloat(value) / objectWidth
-          object.set('scaleX', scaleX)
-        }
-        break
-      case 'height':
-        const objectHeight = object.height || 1
-        if (objectHeight > 0) {
-          const scaleY = parseFloat(value) / objectHeight
-          object.set('scaleY', scaleY)
-        }
         break
       case 'angle':
         object.set('angle', parseFloat(value) || 0)
@@ -352,13 +404,13 @@ const ObjectAttributes = ({ object, canvas }) => {
   }
 
   return (
-    <div className="p-4 space-y-4">
+    <div className="p-5 space-y-5">
       {/* Object Type */}
       <div>
-        <label className="block text-xs font-semibold text-gray-300 mb-1">
+        <label className="block text-xs font-semibold text-gray-400 mb-2 uppercase tracking-wider">
           Type
         </label>
-        <div className="px-3 py-2 bg-slate-700/50 rounded-xl border border-neon-purple/30 text-sm text-gray-200">
+        <div className="px-3 py-2.5 bg-slate-700/50 rounded-lg border border-neon-purple/30 text-sm text-gray-200 font-medium">
           {object.type || 'Unknown'}
         </div>
       </div>
@@ -366,13 +418,13 @@ const ObjectAttributes = ({ object, canvas }) => {
       {/* Text Content (for text objects) */}
       {object.type === 'textbox' && (
         <div>
-          <label className="block text-xs font-semibold text-gray-300 mb-1">
+          <label className="block text-xs font-semibold text-gray-400 mb-2 uppercase tracking-wider">
             Text Content
           </label>
           <textarea
             value={attributes.text}
             onChange={(e) => updateAttribute('text', e.target.value)}
-            className="w-full px-3 py-2 bg-slate-700/50 border border-neon-purple/30 text-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-neon-cyan focus:border-neon-cyan transition-all duration-300"
+            className="w-full px-3 py-2.5 bg-slate-700/50 border border-neon-purple/30 text-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-neon-cyan focus:border-neon-cyan transition-all duration-300 text-sm resize-none"
             rows={3}
           />
         </div>
@@ -381,13 +433,13 @@ const ObjectAttributes = ({ object, canvas }) => {
       {/* Font Family (for text objects) */}
       {object.type === 'textbox' && (
         <div>
-          <label className="block text-xs font-semibold text-gray-300 mb-1">
+          <label className="block text-xs font-semibold text-gray-400 mb-2 uppercase tracking-wider">
             Font Family
           </label>
           <select
             value={attributes.fontFamily}
             onChange={(e) => updateAttribute('fontFamily', e.target.value)}
-            className="w-full px-3 py-2 bg-slate-700/50 border border-neon-purple/30 text-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-neon-cyan focus:border-neon-cyan transition-all duration-300"
+            className="w-full px-3 py-2.5 bg-slate-700/50 border border-neon-purple/30 text-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-neon-cyan focus:border-neon-cyan transition-all duration-300 text-sm"
             style={{ fontFamily: attributes.fontFamily }}
           >
             <option value="Arial">Arial</option>
@@ -404,14 +456,14 @@ const ObjectAttributes = ({ object, canvas }) => {
       {/* Font Size (for text objects) */}
       {object.type === 'textbox' && (
         <div>
-          <label className="block text-xs font-semibold text-gray-300 mb-1">
+          <label className="block text-xs font-semibold text-gray-400 mb-2 uppercase tracking-wider">
             Font Size
           </label>
           <input
             type="number"
             value={attributes.fontSize}
             onChange={(e) => updateAttribute('fontSize', e.target.value)}
-            className="w-full px-3 py-2 bg-slate-700/50 border border-neon-purple/30 text-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-neon-cyan focus:border-neon-cyan transition-all duration-300"
+            className="w-full px-3 py-2.5 bg-slate-700/50 border border-neon-purple/30 text-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-neon-cyan focus:border-neon-cyan transition-all duration-300 text-sm"
             min="8"
             max="200"
           />
@@ -420,7 +472,7 @@ const ObjectAttributes = ({ object, canvas }) => {
 
       {/* Color */}
       <div>
-        <label className="block text-xs font-semibold text-gray-300 mb-1">
+        <label className="block text-xs font-semibold text-gray-400 mb-2 uppercase tracking-wider">
           Color
         </label>
         <div className="flex gap-2">
@@ -428,75 +480,113 @@ const ObjectAttributes = ({ object, canvas }) => {
             type="color"
             value={attributes.fill}
             onChange={(e) => updateAttribute('fill', e.target.value)}
-            className="w-12 h-10 border border-neon-purple/30 rounded-xl cursor-pointer shadow-card hover:shadow-neon-sm transition-all duration-300"
+            className="w-14 h-11 border border-neon-purple/30 rounded-lg cursor-pointer shadow-card hover:shadow-neon-sm transition-all duration-300"
           />
           <input
             type="text"
             value={attributes.fill}
             onChange={(e) => updateAttribute('fill', e.target.value)}
-            className="flex-1 px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="flex-1 px-3 py-2.5 bg-slate-700/50 border border-neon-purple/30 text-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-neon-cyan focus:border-neon-cyan transition-all duration-300 text-sm"
             placeholder="#000000"
           />
         </div>
       </div>
 
       {/* Position */}
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-xs font-semibold text-gray-300 mb-1">
+          <label className="block text-xs font-semibold text-gray-400 mb-2 uppercase tracking-wider">
             X Position
           </label>
           <input
             type="number"
             value={attributes.left}
             onChange={(e) => updateAttribute('left', e.target.value)}
-            className="w-full px-3 py-2 bg-slate-700/50 border border-neon-purple/30 text-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-neon-cyan focus:border-neon-cyan transition-all duration-300"
+            className="w-full px-3 py-2.5 bg-slate-700/50 border border-neon-purple/30 text-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-neon-cyan focus:border-neon-cyan transition-all duration-300 text-sm"
           />
         </div>
         <div>
-          <label className="block text-xs font-semibold text-gray-300 mb-1">
+          <label className="block text-xs font-semibold text-gray-400 mb-2 uppercase tracking-wider">
             Y Position
           </label>
           <input
             type="number"
             value={attributes.top}
             onChange={(e) => updateAttribute('top', e.target.value)}
-            className="w-full px-3 py-2 bg-slate-700/50 border border-neon-purple/30 text-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-neon-cyan focus:border-neon-cyan transition-all duration-300"
+            className="w-full px-3 py-2.5 bg-slate-700/50 border border-neon-purple/30 text-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-neon-cyan focus:border-neon-cyan transition-all duration-300 text-sm"
           />
         </div>
       </div>
 
       {/* Size */}
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-xs font-semibold text-gray-300 mb-1">
+          <label className="block text-xs font-semibold text-gray-400 mb-2 uppercase tracking-wider">
             Width
           </label>
           <input
             type="number"
-            value={attributes.width}
-            onChange={(e) => updateAttribute('width', e.target.value)}
-            className="w-full px-3 py-2 bg-slate-700/50 border border-neon-purple/30 text-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-neon-cyan focus:border-neon-cyan transition-all duration-300"
+            value={attributes.width || ''}
+            onChange={(e) => {
+              const val = e.target.value
+              // Allow empty string for typing, or valid positive numbers
+              if (val === '' || (parseFloat(val) > 0 && parseFloat(val) <= 10000 && !isNaN(parseFloat(val)))) {
+                updateAttribute('width', val)
+              }
+            }}
+            onBlur={(e) => {
+              // Restore valid value if empty or invalid on blur
+              const val = e.target.value.trim()
+              const numVal = parseFloat(val)
+              if (val === '' || !numVal || numVal <= 0 || isNaN(numVal)) {
+                const currentWidth = Math.round(object.width * (object.scaleX || 1) || 1)
+                setAttributes(prev => ({ ...prev, width: currentWidth }))
+              } else {
+                // Ensure the scale is updated with the final value
+                updateAttribute('width', val)
+              }
+            }}
+            className="w-full px-3 py-2.5 bg-slate-700/50 border border-neon-purple/30 text-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-neon-cyan focus:border-neon-cyan transition-all duration-300 text-sm"
             min="1"
+            step="1"
           />
         </div>
         <div>
-          <label className="block text-xs font-semibold text-gray-300 mb-1">
+          <label className="block text-xs font-semibold text-gray-400 mb-2 uppercase tracking-wider">
             Height
           </label>
           <input
             type="number"
-            value={attributes.height}
-            onChange={(e) => updateAttribute('height', e.target.value)}
-            className="w-full px-3 py-2 bg-slate-700/50 border border-neon-purple/30 text-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-neon-cyan focus:border-neon-cyan transition-all duration-300"
+            value={attributes.height || ''}
+            onChange={(e) => {
+              const val = e.target.value
+              // Allow empty string for typing, or valid positive numbers
+              if (val === '' || (parseFloat(val) > 0 && parseFloat(val) <= 10000 && !isNaN(parseFloat(val)))) {
+                updateAttribute('height', val)
+              }
+            }}
+            onBlur={(e) => {
+              // Restore valid value if empty or invalid on blur
+              const val = e.target.value.trim()
+              const numVal = parseFloat(val)
+              if (val === '' || !numVal || numVal <= 0 || isNaN(numVal)) {
+                const currentHeight = Math.round(object.height * (object.scaleY || 1) || 1)
+                setAttributes(prev => ({ ...prev, height: currentHeight }))
+              } else {
+                // Ensure the scale is updated with the final value
+                updateAttribute('height', val)
+              }
+            }}
+            className="w-full px-3 py-2.5 bg-slate-700/50 border border-neon-purple/30 text-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-neon-cyan focus:border-neon-cyan transition-all duration-300 text-sm"
             min="1"
+            step="1"
           />
         </div>
       </div>
 
       {/* Rotation */}
       <div>
-        <label className="block text-xs font-semibold text-gray-300 mb-1">
+        <label className="block text-xs font-semibold text-gray-400 mb-2 uppercase tracking-wider">
           Rotation: {attributes.angle}°
         </label>
         <input
@@ -511,7 +601,7 @@ const ObjectAttributes = ({ object, canvas }) => {
 
       {/* Opacity */}
       <div>
-        <label className="block text-xs font-semibold text-gray-300 mb-1">
+        <label className="block text-xs font-semibold text-gray-400 mb-2 uppercase tracking-wider">
           Opacity: {attributes.opacity}%
         </label>
         <input

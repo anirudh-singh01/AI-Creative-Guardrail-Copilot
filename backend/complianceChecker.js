@@ -562,9 +562,12 @@ export async function applyAutoFix(canvasData, violations, options = {}) {
             try {
               const currentText = obj.text || ''
               
-              // Call fix-copy endpoint (simulated - in production would be HTTP call)
-              // For now, use direct LLM call if available
-              if (openai) {
+              // Use LLM to fix copy - try Groq (free) first, then OpenAI
+              const groqApiKey = process.env.GROQ_API_KEY && 
+                                process.env.GROQ_API_KEY !== 'your-groq-api-key-here' 
+                                ? process.env.GROQ_API_KEY : null
+              
+              if (groqApiKey || openai) {
                 // Import retail rules
                 const { getRetailRules } = await import('./retailRules.js')
                 const rules = getRetailRules()
@@ -589,26 +592,66 @@ Retailer Rules:
 
 Return ONLY the corrected copy. Do not include explanations or notes.`
 
-                const completion = await openai.chat.completions.create({
-                  model: 'gpt-4',
-                  messages: [
-                    {
-                      role: 'system',
-                      content: systemPrompt
-                    },
-                    {
-                      role: 'user',
-                      content: `Rewrite this text to be compliant with retailer rules, avoid claims, avoid misleading language, and enforce allowed terms:\n\n${currentText}\n\nReturn the corrected copy:`
-                    }
-                  ],
-                  temperature: 0.3,
-                  max_tokens: 200
-                })
+                let correctedText
                 
-                const correctedText = completion.choices[0]?.message?.content?.trim()
+                if (groqApiKey) {
+                  // Use Groq API (free)
+                  const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                      'Authorization': `Bearer ${groqApiKey}`,
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                      model: 'llama-3.1-70b-versatile',
+                      messages: [
+                        {
+                          role: 'system',
+                          content: systemPrompt
+                        },
+                        {
+                          role: 'user',
+                          content: `Rewrite this text to be compliant with retailer rules, avoid claims, avoid misleading language, and enforce allowed terms:\n\n${currentText}\n\nReturn the corrected copy:`
+                        }
+                      ],
+                      temperature: 0.3,
+                      max_tokens: 200
+                    })
+                  })
+                  
+                  if (groqResponse.ok) {
+                    const groqData = await groqResponse.json()
+                    correctedText = groqData.choices[0]?.message?.content?.trim()
+                  }
+                }
+                
+                if (!correctedText && openai) {
+                  // Fallback to OpenAI if Groq failed or not available
+                  const completion = await openai.chat.completions.create({
+                    model: 'gpt-4',
+                    messages: [
+                      {
+                        role: 'system',
+                        content: systemPrompt
+                      },
+                      {
+                        role: 'user',
+                        content: `Rewrite this text to be compliant with retailer rules, avoid claims, avoid misleading language, and enforce allowed terms:\n\n${currentText}\n\nReturn the corrected copy:`
+                      }
+                    ],
+                    temperature: 0.3,
+                    max_tokens: 200
+                  })
+                  
+                  correctedText = completion.choices[0]?.message?.content?.trim()
+                }
+                
                 if (correctedText && correctedText.length > 0) {
                   obj.text = correctedText
                   appliedFixes.add(fixKey)
+                } else {
+                  // Fallback to basic sanitization if LLM failed
+                  throw new Error('LLM fix failed')
                 }
               } else {
                 // Fallback: basic sanitization
