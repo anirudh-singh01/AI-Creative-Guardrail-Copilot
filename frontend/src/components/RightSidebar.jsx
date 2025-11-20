@@ -1,5 +1,5 @@
 import useStore from '../store/useStore'
-import { AlertCircle, CheckCircle2, Wrench, Plus, Square } from 'lucide-react'
+import { AlertCircle, CheckCircle2, Wrench, Plus, Square, Sparkles } from 'lucide-react'
 import api from '../services/api'
 import { useEffect, useState } from 'react'
 import { fabric } from 'fabric'
@@ -298,6 +298,7 @@ const RightSidebar = () => {
 }
 
 const ObjectAttributes = ({ object, canvas }) => {
+  const [isRewriting, setIsRewriting] = useState(false)
   const [attributes, setAttributes] = useState({
     fontSize: object.fontSize || '',
     fontFamily: object.fontFamily || 'Arial',
@@ -427,6 +428,48 @@ const ObjectAttributes = ({ object, canvas }) => {
             className="w-full px-3 py-2.5 bg-slate-700/50 border border-neon-purple/30 text-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-neon-cyan focus:border-neon-cyan transition-all duration-300 text-sm resize-none"
             rows={3}
           />
+        </div>
+      )}
+
+      {/* Magic Rewrite Button (for text objects) */}
+      {object.type === 'textbox' && (
+        <div className="pt-1 pb-2">
+          <button
+            onClick={async () => {
+              if (!attributes.text) return
+              setIsRewriting(true)
+              try {
+                const result = await api.fixCopy(attributes.text)
+                if (result.success && result.correctedHeadline) {
+                  updateAttribute('text', result.correctedHeadline)
+                } else {
+                  alert('Could not rewrite text. ' + (result.message || ''))
+                }
+              } catch (error) {
+                console.error('Rewrite failed:', error)
+                alert('Failed to rewrite text')
+              } finally {
+                setIsRewriting(false)
+              }
+            }}
+            disabled={isRewriting || !attributes.text}
+            className="w-full px-4 py-2.5 bg-gradient-to-r from-neon-purple to-neon-cyan text-white rounded-lg hover:from-neon-purple/90 hover:to-neon-cyan/90 flex items-center gap-2 justify-center transition-all duration-300 shadow-card hover:shadow-card-hover transform hover:scale-[1.02] disabled:opacity-50 disabled:transform-none text-sm font-medium"
+          >
+            {isRewriting ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white border-t-transparent"></div>
+                Rewriting...
+              </>
+            ) : (
+              <>
+                <Sparkles size={16} />
+                Magic Rewrite (AI)
+              </>
+            )}
+          </button>
+          <p className="text-[10px] text-gray-400 mt-1.5 text-center">
+            Automatically fixes compliance issues & improves copy
+          </p>
         </div>
       )}
 

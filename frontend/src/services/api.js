@@ -20,6 +20,14 @@ const api = {
     })
     return response.data
   },
+
+  fixCopy: async (headline, subhead = null) => {
+    const response = await axios.post(`${API_BASE_URL}/fix-copy`, {
+      headline,
+      subhead,
+    })
+    return response.data
+  },
 }
 
 export default api

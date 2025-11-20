@@ -120,85 +120,33 @@ app.post('/api/remove-bg', async (req, res) => {
     const base64Data = imageDataUrl.replace(/^data:image\/\w+;base64,/, '')
     const imageBuffer = Buffer.from(base64Data, 'base64')
 
-    // For prototype/mock: Use Sharp to create a simple transparency effect
-    // In production, replace this with actual AI background removal:
-    // - OpenAI Vision API with image segmentation
-    // - remove.bg API
-    // - Custom ML model
+    // Use @imgly/background-removal-node for real background removal
+    // This runs locally and is free
+    console.log('Starting background removal...')
     
-    let processedImage
+    // Dynamic import since it's an ESM module
+    const { removeBackground } = await import('@imgly/background-removal-node')
     
-    try {
-      // Mock implementation: For prototype, we'll return the image with alpha channel
-      // This simulates background removal - in production, replace with actual AI model
-      
-      // Get image metadata
-      const metadata = await sharp(imageBuffer).metadata()
-      
-      // Process image: ensure PNG format with alpha channel
-      // In a real implementation, you would:
-      // 1. Send to AI model (OpenAI, remove.bg API, etc.)
-      // 2. Get processed image with transparent background
-      // 3. Return the processed PNG
-      
-      processedImage = await sharp(imageBuffer)
-        .ensureAlpha() // Add alpha channel if missing
-        .png({ 
-          quality: 100,
-          compressionLevel: 6,
-          adaptiveFiltering: true
-        })
-        .toBuffer()
-      
-      // Simulate AI processing delay
-      await new Promise(resolve => setTimeout(resolve, 1500))
-      
-      // TODO: Replace with actual AI background removal
-      // Example integration options:
-      //
-      // Option 1: OpenAI Vision API (when available)
-      // const response = await openai.chat.completions.create({
-      //   model: "gpt-4-vision-preview",
-      //   messages: [{
-      //     role: "user",
-      //     content: [
-      //       { type: "text", text: "Remove the background from this image, return PNG with transparency" },
-      //       { type: "image_url", image_url: { url: imageDataUrl } }
-      //     ]
-      //   }]
-      // })
-      //
-      // Option 2: remove.bg API
-      // const FormData = require('form-data')
-      // const form = new FormData()
-      // form.append('image_file', imageBuffer)
-      // const response = await fetch('https://api.remove.bg/v1.0/removebg', {
-      //   method: 'POST',
-      //   headers: { 'X-Api-Key': process.env.REMOVE_BG_API_KEY },
-      //   body: form
-      // })
-      // processedImage = await response.buffer()
-      //
-      // Option 3: Custom ML model endpoint
-      // const response = await fetch('https://your-ml-model-endpoint.com/remove-bg', {
-      //   method: 'POST',
-      //   body: imageBuffer
-      // })
-      // processedImage = await response.buffer()
-      
-    } catch (processingError) {
-      console.error('Image processing error:', processingError)
-      // Fallback: return original image with alpha channel
-      processedImage = await sharp(imageBuffer)
-        .ensureAlpha()
-        .png()
-        .toBuffer()
-    }
+    // Convert buffer to Blob as required by the library
+    const blob = new Blob([imageBuffer], { type: 'image/png' })
+    
+    // Process the image
+    const processedBlob = await removeBackground(blob, {
+      progress: (key, current, total) => {
+        console.log(`Downloading model ${key}: ${current} of ${total}`)
+      }
+    })
+    
+    // Convert result Blob back to Buffer
+    const arrayBuffer = await processedBlob.arrayBuffer()
+    const processedBuffer = Buffer.from(arrayBuffer)
 
     // Return PNG with transparent background
     res.setHeader('Content-Type', 'image/png')
     res.setHeader('Content-Disposition', 'attachment; filename=removed-bg.png')
-    res.send(processedImage)
+    res.send(processedBuffer)
+    console.log('Background removal complete')
+    
   } catch (error) {
     console.error('Background removal error:', error)
     res.status(500).json({ error: 'Background removal failed', details: error.message })
